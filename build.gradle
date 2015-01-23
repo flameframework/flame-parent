@@ -24,6 +24,18 @@
  * from the maven repository and everything still works.
  *
  */
+
+apply plugin: 'scala'
+
+sourceCompatibility = '1.7'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    compile 'org.scala-lang:scala-library:2.11.2'
+}
   
 // make sure we've parsed the subproject dependencies
 evaluationDependsOnChildren()
