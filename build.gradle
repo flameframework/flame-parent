@@ -1,0 +1,57 @@
+/**
+ * Gradle build script that makes it also possible to build subprojects in a 
+ * multi-project build as separate, individual projects.
+ * 
+ * In order to do so, this build script replaces maven dependencies by 
+ * subproject dependencies whenever possible. If one of the subprojects in the
+ * multi-project build matches a maven dependency, the maven dependency is 
+ * replaced by the project dependency. If none of the subprojects matches the 
+ * maven dependency, the dependency is fetched from maven.
+ *
+ * For example, suppose we have a multi-project build like this:
+ * 
+ * parent/
+ *   library/      (group = 'com.mygroup', version = '1.0-SNAPSHOT')
+ *   projectx/     (group = 'com.mygroup', version = '1.0-SNAPSHOT')
+ * 
+ * projectx has a dependency 'com.mygroup:library:+'.
+ * Because the dependency is actually one of the other subprojects,
+ * this build script replaces the specified dependency by a dependency
+ * on the other subproject (as if you specified "project(':library')").
+ *
+ * If we put projectx in another directory, separate from the multi-project
+ * build, we can still build the project. In this case, the library is fetched
+ * from the maven repository and everything still works.
+ *
+ */
+  
+// make sure we've parsed the subproject dependencies
+evaluationDependsOnChildren()
+
+// returns a string identifier "group:name:version" for the project
+def identifier(project) { "${project.group}:${project.name}".toString() }
+
+// make a map "identifier -> project" of all subprojects
+def subprojectsByIdentifier = subprojects.collectEntries { [identifier(it), it] }
+
+// For each dependency, check if its identifier matches the identifier of another subproject.
+// If so, replace the maven dependency by a dependency on the other project.
+subprojects.each { p ->
+  def hacks = [] // list of changes we're going to make
+  p.configurations.each { c ->
+    c.dependencies.each { d ->
+        def sub = subprojectsByIdentifier[identifier(d)]
+        if (sub != null) {
+          hacks.add({
+            // can't do this immediately or we'll get ConcurrentModificationExceptions
+            c.dependencies.remove(d)
+            p.dependencies.add(c.name, sub)
+          })
+        }
+    }
+  }
+  // Now we can safely apply the changes
+  for (hack in hacks) {
+    hack()
+  }
+}
